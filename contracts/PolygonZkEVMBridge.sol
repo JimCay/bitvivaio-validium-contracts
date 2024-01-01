@@ -68,6 +68,21 @@ contract PolygonZkEVMBridge is
     // PolygonZkEVM address
     address public polygonZkEVMaddress;
 
+    // admin address
+    address public admin;
+
+    // bridge fee default is none
+    uint256 public bridgeFee;
+
+    // bridge fee address;
+    address public feeAddress;
+
+    // gas token address;
+    address public gasTokenAddress;
+
+    // token metadata for origin token
+    bytes public gasTokenMetadata;
+
     /**
      * @param _networkID networkID
      * @param _globalExitRootManager global exit root manager address
@@ -78,12 +93,17 @@ contract PolygonZkEVMBridge is
     function initialize(
         uint32 _networkID,
         IBasePolygonZkEVMGlobalExitRoot _globalExitRootManager,
-        address _polygonZkEVMaddress
+        address _polygonZkEVMaddress,
+        address _admin,
+        address _gasTokenAddress,
+        bytes memory _gasTokenMetadata
     ) external virtual initializer {
         networkID = _networkID;
         globalExitRootManager = _globalExitRootManager;
         polygonZkEVMaddress = _polygonZkEVMaddress;
-
+        admin = _admin;
+        gasTokenAddress = _gasTokenAddress;
+        gasTokenMetadata = _gasTokenMetadata;
         // Initialize OZ contracts
         __ReentrancyGuard_init();
     }
@@ -91,6 +111,13 @@ contract PolygonZkEVMBridge is
     modifier onlyPolygonZkEVM() {
         if (polygonZkEVMaddress != msg.sender) {
             revert OnlyPolygonZkEVM();
+        }
+        _;
+    }
+
+    modifier onlyAdmin() {
+        if (admin != msg.sender) {
+            revert OnlyAdmin();
         }
         _;
     }
@@ -161,16 +188,19 @@ contract PolygonZkEVMBridge is
 
         if (token == address(0)) {
             // Ether transfer
-            if (msg.value != amount) {
+            if ((msg.value - bridgeFee) != amount) {
                 revert AmountDoesNotMatchMsgValue();
             }
-
+            if (gasTokenAddress != address (0)) {
+                originTokenAddress = gasTokenAddress;
+                metadata = gasTokenMetadata;
+            }
             // Ether is treated as ether from mainnet
             originNetwork = _MAINNET_NETWORK_ID;
         } else {
-            // Check msg.value is 0 if tokens are bridged
-            if (msg.value != 0) {
-                revert MsgValueNotZero();
+            // Check whether msg.value is equal to the cross-chain handling fee
+            if (msg.value != bridgeFee) {
+                revert AmountDoesNotMatchMsgValue();
             }
 
             TokenInformation memory tokenInfo = wrappedTokenToTokenInfo[token];
@@ -215,6 +245,9 @@ contract PolygonZkEVMBridge is
                     _safeDecimals(token)
                 );
             }
+            if (originTokenAddress == gasTokenAddress) {
+                originTokenAddress = address(0);
+            }
         }
 
         emit BridgeEvent(
@@ -240,60 +273,20 @@ contract PolygonZkEVMBridge is
             )
         );
 
+        if (feeAddress != address(0) && bridgeFee > 0) {
+            (bool success, ) = feeAddress.call{value: bridgeFee}("");
+            if (!success) {
+                revert EtherTransferFailed();
+            }
+        }
+
         // Update the new root to the global exit root manager if set by the user
         if (forceUpdateGlobalExitRoot) {
             _updateGlobalExitRoot();
         }
     }
 
-    /**
-     * @notice Bridge message and send ETH value
-     * @param destinationNetwork Network destination
-     * @param destinationAddress Address destination
-     * @param forceUpdateGlobalExitRoot Indicates if the new global exit root is updated or not
-     * @param metadata Message metadata
-     */
-    function bridgeMessage(
-        uint32 destinationNetwork,
-        address destinationAddress,
-        bool forceUpdateGlobalExitRoot,
-        bytes calldata metadata
-    ) external payable ifNotEmergencyState {
-        if (
-            destinationNetwork == networkID ||
-            destinationNetwork >= _CURRENT_SUPPORTED_NETWORKS
-        ) {
-            revert DestinationNetworkInvalid();
-        }
 
-        emit BridgeEvent(
-            _LEAF_TYPE_MESSAGE,
-            networkID,
-            msg.sender,
-            destinationNetwork,
-            destinationAddress,
-            msg.value,
-            metadata,
-            uint32(depositCount)
-        );
-
-        _deposit(
-            getLeafValue(
-                _LEAF_TYPE_MESSAGE,
-                networkID,
-                msg.sender,
-                destinationNetwork,
-                destinationAddress,
-                msg.value,
-                keccak256(metadata)
-            )
-        );
-
-        // Update the new root to the global exit root manager if set by the user
-        if (forceUpdateGlobalExitRoot) {
-            _updateGlobalExitRoot();
-        }
-    }
 
     /**
      * @notice Verify merkle proof and withdraw tokens/ether
@@ -408,70 +401,6 @@ contract PolygonZkEVMBridge is
         );
     }
 
-    /**
-     * @notice Verify merkle proof and execute message
-     * If the receiving address is an EOA, the call will result as a success
-     * Which means that the amount of ether will be transferred correctly, but the message
-     * will not trigger any execution
-     * @param smtProof Smt proof
-     * @param index Index of the leaf
-     * @param mainnetExitRoot Mainnet exit root
-     * @param rollupExitRoot Rollup exit root
-     * @param originNetwork Origin network
-     * @param originAddress Origin address
-     * @param destinationNetwork Network destination
-     * @param destinationAddress Address destination
-     * @param amount message value
-     * @param metadata Abi encoded metadata if any, empty otherwise
-     */
-    function claimMessage(
-        bytes32[_DEPOSIT_CONTRACT_TREE_DEPTH] calldata smtProof,
-        uint32 index,
-        bytes32 mainnetExitRoot,
-        bytes32 rollupExitRoot,
-        uint32 originNetwork,
-        address originAddress,
-        uint32 destinationNetwork,
-        address destinationAddress,
-        uint256 amount,
-        bytes calldata metadata
-    ) external ifNotEmergencyState {
-        // Verify leaf exist and it does not have been claimed
-        _verifyLeaf(
-            smtProof,
-            index,
-            mainnetExitRoot,
-            rollupExitRoot,
-            originNetwork,
-            originAddress,
-            destinationNetwork,
-            destinationAddress,
-            amount,
-            metadata,
-            _LEAF_TYPE_MESSAGE
-        );
-
-        // Execute message
-        // Transfer ether
-        /* solhint-disable avoid-low-level-calls */
-        (bool success, ) = destinationAddress.call{value: amount}(
-            abi.encodeCall(
-                IBridgeMessageReceiver.onMessageReceived,
-                (originAddress, originNetwork, metadata)
-            )
-        );
-        if (!success) {
-            revert MessageFailed();
-        }
-
-        emit ClaimEvent(
-            index,
-            originNetwork,
-            originAddress,
-            destinationAddress,
-            amount
-        );
-    }
 
     /**
      * @notice Returns the precalculated address of a wrapper using the token information
@@ -852,6 +781,15 @@ contract PolygonZkEVMBridge is
             return string(bytesArray);
         } else {
             return "NOT_VALID_ENCODING";
+        }
+    }
+
+    function setBridgeSettingsFee(address _feeAddress, uint256 _bridgeFee) external onlyAdmin {
+        if (_feeAddress != address(0)) {
+            feeAddress = _feeAddress;
+        }
+        if (_bridgeFee > 0) {
+            bridgeFee = _bridgeFee;
         }
     }
 }

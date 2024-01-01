@@ -23,6 +23,9 @@ async function deployCDKValidiumDeployer(deployerAddress, signer) {
         gasPrice: gasPrice.toHexString(),
         data: deployTxCDKValidiumDeployer,
     };
+    if (!(ethers.network.name === 'hardhat')) {
+        tx.chainId = signer.provider.network.chainId;
+    }
 
     const signature = {
         v: 27,

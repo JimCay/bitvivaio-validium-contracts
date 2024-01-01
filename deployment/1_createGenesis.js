@@ -76,7 +76,7 @@ async function main() {
     const dataCallAdmin = proxyAdminFactory.interface.encodeFunctionData('transferOwnership', [deployer.address]);
     const [proxyAdminAddress] = await create2Deployment(cdkValidiumDeployerContract, salt, deployTransactionAdmin, dataCallAdmin, deployer);
 
-    // Deploy implementation PolygonZkEVMBridg
+    // Deploy implementation PolygonZkEVMBridge
     const PolygonZkEVMBridgeFactory = await ethers.getContractFactory('PolygonZkEVMBridge', deployer);
     const deployTransactionBridge = (PolygonZkEVMBridgeFactory.getDeployTransaction()).data;
     // Mandatory to override the gasLimit since the estimation with create are mess up D:
@@ -92,7 +92,7 @@ async function main() {
 
     /*
      * deploy proxy
-     * Do not initialize directlythe proxy since we want to deploy the same code on L2 and this will alter the bytecode deployed of the proxy
+     * Do not initialize directly the proxy since we want to deploy the same code on L2 and this will alter the bytecode deployed of the proxy
      */
     const transparentProxyFactory = await ethers.getContractFactory('TransparentUpgradeableProxy', deployer);
     const initializeEmptyDataProxy = '0x';
@@ -102,12 +102,18 @@ async function main() {
         initializeEmptyDataProxy,
     )).data;
 
+    const gasTokenMetadata = ethers.utils.defaultAbiCoder.encode(['string', 'string', 'uint8'], ['BTC Coin', 'XBTC', 18]);
+    const bridgeAdmin = process.env.BRIDGE_ADMIN_ADDR;
+    const tokenAddr = process.env.GASTOKEN_ADDR;
     const dataCallProxy = PolygonZkEVMBridgeFactory.interface.encodeFunctionData(
         'initialize',
         [
             networkIDL2,
             globalExitRootL2Address,
             cdkValidiumAddressL2,
+            bridgeAdmin,
+            tokenAddr,
+            gasTokenMetadata,
         ],
     );
     const [proxyBridgeAddress] = await create2Deployment(
@@ -297,6 +303,13 @@ async function main() {
         balance: '0',
         nonce: deployerInfo.nonce.toString(),
         address: deployer.address,
+    });
+
+    genesis.push({
+        accountName: 'claimTxManager',
+        balance: '1000000000000000000',
+        nonce: '0',
+        address: process.env.TEST_ADDR,
     });
 
     if (argv.test) {

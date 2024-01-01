@@ -10,7 +10,7 @@ const deployParameters = require('../deploy_parameters.json');
 
 async function main() {
     // Load provider
-    let currentProvider = ethers.provider;
+    let currentProvider = new ethers.providers.FallbackProvider([ethers.provider], 1);
     if (deployParameters.multiplierGas || deployParameters.maxFeePerGas) {
         if (process.env.HARDHAT_NETWORK !== 'hardhat') {
             currentProvider = new ethers.providers.JsonRpcProvider(`https://${process.env.HARDHAT_NETWORK}.infura.io/v3/${process.env.INFURA_PROJECT_ID}`);
@@ -65,10 +65,10 @@ async function main() {
     } = deployParameters;
 
     /*
-     *Deployment MATIC
+     *Deployment XBTC
      */
-    const maticTokenName = 'Matic Token';
-    const maticTokenSymbol = 'MATIC';
+    const maticTokenName = 'xbtc Token';
+    const maticTokenSymbol = 'XBTC';
     const maticTokenInitialBalance = ethers.utils.parseEther('20000000');
 
     const maticTokenFactory = await ethers.getContractFactory('ERC20PermitMock', deployer);
@@ -81,7 +81,7 @@ async function main() {
     await maticTokenContract.deployed();
 
     console.log('#######################\n');
-    console.log('Matic deployed to:', maticTokenContract.address);
+    console.log('XBTC deployed to:', maticTokenContract.address);
 
     // fund sequencer account with tokens and ether if it have less than 0.1 ether.
     const balanceEther = await ethers.provider.getBalance(trustedSequencer);
