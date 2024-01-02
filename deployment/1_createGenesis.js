@@ -42,6 +42,7 @@ async function main() {
         'minDelayTimelock',
         'salt',
         'initialCDKValidiumDeployerOwner',
+        'maticTokenAddress',
     ];
 
     for (const parameterName of mandatoryDeploymentParameters) {
@@ -55,6 +56,7 @@ async function main() {
         minDelayTimelock,
         salt,
         initialCDKValidiumDeployerOwner,
+        maticTokenAddress,
     } = deployParameters;
 
     // Load deployer
@@ -104,7 +106,7 @@ async function main() {
 
     const gasTokenMetadata = ethers.utils.defaultAbiCoder.encode(['string', 'string', 'uint8'], ['BTC Coin', 'XBTC', 18]);
     const bridgeAdmin = process.env.BRIDGE_ADMIN_ADDR;
-    const tokenAddr = process.env.GASTOKEN_ADDR;
+    // const tokenAddr = process.env.GASTOKEN_ADDR;
     const dataCallProxy = PolygonZkEVMBridgeFactory.interface.encodeFunctionData(
         'initialize',
         [
@@ -112,7 +114,7 @@ async function main() {
             globalExitRootL2Address,
             cdkValidiumAddressL2,
             bridgeAdmin,
-            tokenAddr,
+            maticTokenAddress,
             gasTokenMetadata,
         ],
     );

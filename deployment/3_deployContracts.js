@@ -87,10 +87,10 @@ async function main() {
     } = deployParameters;
 
     // Load provider
-    let currentProvider = new ethers.providers.FallbackProvider([ethers.provider], 1);
+    const currentProvider = new ethers.providers.FallbackProvider([ethers.provider], 1);
     if (deployParameters.multiplierGas || deployParameters.maxFeePerGas) {
         if (process.env.HARDHAT_NETWORK !== 'hardhat') {
-            //currentProvider = new ethers.providers.JsonRpcProvider(`https://${process.env.HARDHAT_NETWORK}.infura.io/v3/${process.env.INFURA_PROJECT_ID}`);
+            // currentProvider = new ethers.providers.JsonRpcProvider(`https://${process.env.HARDHAT_NETWORK}.infura.io/v3/${process.env.INFURA_PROJECT_ID}`);
             if (deployParameters.maxPriorityFeePerGas && deployParameters.maxFeePerGas) {
                 console.log(`Hardcoded gas used: MaxPriority${deployParameters.maxPriorityFeePerGas} gwei, MaxFee${deployParameters.maxFeePerGas} gwei`);
                 const FEE_DATA = {
@@ -247,7 +247,7 @@ async function main() {
 
     const gasTokenMetadata = ethers.utils.defaultAbiCoder.encode(['string', 'string', 'uint8'], ['BTC Coin', 'XBTC', 18]);
     const bridgeAdmin = process.env.BRIDGE_ADMIN_ADDR;
-    const tokenAddr = process.env.GASTOKEN_ADDR;
+    // const tokenAddr = process.env.GASTOKEN_ADDR;
     const dataCallProxy = PolygonZkEVMBridgeFactory.interface.encodeFunctionData(
         'initialize',
         [
@@ -255,7 +255,7 @@ async function main() {
             precalculateGLobalExitRootAddress,
             precalculateCDKValidiumAddress,
             bridgeAdmin,
-            tokenAddr,
+            maticTokenAddress,
             gasTokenMetadata,
         ],
     );

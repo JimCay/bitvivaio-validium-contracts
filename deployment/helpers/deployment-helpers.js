@@ -2,6 +2,7 @@
 /* eslint-disable no-console, no-inner-declarations, no-undef, import/no-unresolved */
 const { expect } = require('chai');
 const { ethers } = require('hardhat');
+const hre = require('hardhat');
 
 const gasPriceKeylessDeployment = '100'; // 100 gweis
 
@@ -23,7 +24,7 @@ async function deployCDKValidiumDeployer(deployerAddress, signer) {
         gasPrice: gasPrice.toHexString(),
         data: deployTxCDKValidiumDeployer,
     };
-    if (!(ethers.network.name === 'hardhat')) {
+    if (!(hre.network.name === 'hardhat')) {
         tx.chainId = signer.provider.network.chainId;
     }
 
